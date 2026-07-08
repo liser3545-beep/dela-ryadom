@@ -3046,13 +3046,6 @@ function bindEvents() {
     renderActivity();
     saveState();
   });
-  $("#reset-demo").addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem("dela-ryadom-state-v4");
-    localStorage.removeItem("dela-ryadom-state-v3");
-    localStorage.removeItem(DRAFT_KEY);
-    window.location.reload();
-  });
   $("#delete-account").addEventListener("click", async () => {
     if (!state.account.registered) return toast("Аккаунт ещё не создан");
     if (!confirm("Удалить аккаунт? Серверная учётная запись будет удалена, а локальный профиль и черновики на этом устройстве очищены.")) return;
