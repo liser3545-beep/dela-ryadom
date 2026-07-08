@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const webPush = require("web-push");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const ENV_PATH = path.join(ROOT_DIR, ".env");
@@ -186,6 +187,7 @@ function createEmptyDatabase() {
     supportTickets: {},
     files: {},
     pushSubscriptions: {},
+    settings: {},
     smsCodes: {},
     auditLog: [],
   };
@@ -217,6 +219,7 @@ function loadDatabase() {
       supportTickets: objectStore(parsed.supportTickets),
       files: objectStore(parsed.files),
       pushSubscriptions: objectStore(parsed.pushSubscriptions),
+      settings: objectStore(parsed.settings),
       smsCodes: objectStore(parsed.smsCodes),
       auditLog: Array.isArray(parsed.auditLog) ? parsed.auditLog : [],
     };
@@ -258,6 +261,7 @@ function replaceDatabase(next) {
     supportTickets: objectStore(next.supportTickets),
     files: objectStore(next.files),
     pushSubscriptions: objectStore(next.pushSubscriptions),
+    settings: objectStore(next.settings),
     smsCodes: objectStore(next.smsCodes),
     auditLog: Array.isArray(next.auditLog) ? next.auditLog : [],
   });
@@ -459,6 +463,29 @@ async function syncPostgresTables(client, data) {
 async function initPersistence() {
   persistenceDriver = config.database.url ? createPostgresPersistenceDriver() : createJsonPersistenceDriver();
   await persistenceDriver.init();
+  ensureVapidKeys();
+}
+
+function ensureVapidKeys() {
+  const saved = objectStore(database.settings).vapidKeys || {};
+  if (!config.push.vapidPublicKey && saved.publicKey) config.push.vapidPublicKey = saved.publicKey;
+  if (!config.push.vapidPrivateKey && saved.privateKey) config.push.vapidPrivateKey = saved.privateKey;
+  if (!config.push.vapidSubject && saved.subject) config.push.vapidSubject = saved.subject;
+  if (!config.push.vapidSubject) config.push.vapidSubject = `mailto:admin@${new URL(config.publicBaseUrl).hostname}`;
+  if (config.push.vapidPublicKey && config.push.vapidPrivateKey) return;
+
+  const generated = webPush.generateVAPIDKeys();
+  config.push.vapidPublicKey = generated.publicKey;
+  config.push.vapidPrivateKey = generated.privateKey;
+  database.settings = objectStore(database.settings);
+  database.settings.vapidKeys = {
+    publicKey: generated.publicKey,
+    privateKey: generated.privateKey,
+    subject: config.push.vapidSubject,
+    createdAt: new Date().toISOString(),
+  };
+  persistDatabase();
+  console.log("Generated Web Push VAPID keys and stored them in persistence.");
 }
 
 function defaultRedirectUri(provider) {
@@ -698,6 +725,17 @@ function smsProviderStatus() {
 function pushProviderStatus() {
   const configured = Boolean(config.push.vapidPublicKey && config.push.vapidPrivateKey && config.push.vapidSubject);
   return { provider: "web-push", configured, mode: configured ? "production-ready" : "disabled" };
+}
+
+function publicRuntimeConfig() {
+  return {
+    publicBaseUrl: config.publicBaseUrl,
+    push: {
+      configured: pushProviderStatus().configured,
+      vapidPublicKey: config.push.vapidPublicKey || "",
+    },
+    providers: providerStatus(),
+  };
 }
 
 function storageProviderStatus() {
@@ -2009,6 +2047,7 @@ async function handleTaskAction(req, res, taskId, action) {
   persistDatabase();
   logAudit(auditAction, auditDetails, req, { targetType: "task", targetId: task.id });
   broadcastEvent("task.updated", { task: publicFeedTask(task), action });
+  notifyTaskParticipants(task, account.id, "Дела рядом", `${task.publicId || "Задание"}: статус обновлён`, { type: "task", action, taskId: task.id });
   return json(res, 200, { task: visibleTaskForAccount(task, account), action, account: publicAccount(account), transactions: accountTransactions(account.id, 40) });
 }
 
@@ -2068,6 +2107,7 @@ async function handleTaskMessages(req, res, taskId) {
   logAudit("task_message", `Сообщение в задании ${task.publicId || task.id}`, req, { targetType: "task", targetId: task.id });
   broadcastEvent("task.message", { taskId: task.id, publicId: task.publicId, updated: true });
   broadcastEvent("task.updated", { task: publicFeedTask(task) });
+  notifyTaskParticipants(task, account?.id || "", "Новое сообщение", `${task.publicId || "Задание"}: ${message.author} написал(а)`, { type: "task.message", taskId: task.id });
   return json(res, 201, { message, task: visibleTaskForAccount(task, account) });
 }
 
@@ -2601,6 +2641,10 @@ async function handleRequest(req, res) {
         events: { provider: "sse", clients: eventClients.size },
         providers: providerStatus(),
       });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/config") {
+      return json(res, 200, publicRuntimeConfig());
     }
 
     if (req.method === "GET" && url.pathname === "/api/events") return handleEvents(req, res);

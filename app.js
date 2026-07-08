@@ -1010,6 +1010,44 @@ async function apiRequest(url, options = {}) {
   return data || {};
 }
 
+async function loadRuntimeConfig() {
+  try {
+    const data = await apiRequest(API_ENDPOINTS.config);
+    APP_CONFIG.RUNTIME = data;
+    return data;
+  } catch (error) {
+    logError("Push config", error.message || "Не удалось получить публичную конфигурацию backend");
+    return {};
+  }
+}
+
+async function enableWebPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    throw new Error("Этот браузер не поддерживает Web Push уведомления.");
+  }
+  const runtime = APP_CONFIG.RUNTIME || await loadRuntimeConfig();
+  const publicKey = runtime?.push?.vapidPublicKey || APP_CONFIG.VAPID_PUBLIC_KEY || "";
+  if (!publicKey) throw new Error("Push ещё не настроен на backend: нужен VAPID public key.");
+  const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("Разрешите уведомления в браузере, чтобы включить push.");
+  const registration = await navigator.serviceWorker.ready;
+  const existing = await registration.pushManager.getSubscription();
+  const subscription = existing || await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+  const data = await apiRequest(API_ENDPOINTS.pushSubscribe, {
+    method: "POST",
+    body: JSON.stringify({ subscription, accountId: state.account.id || "" }),
+  });
+  if (!data.configured) throw new Error(data.message || "Push-подписка сохранена, но backend ещё не готов отправлять уведомления.");
+  state.pushEnabled = true;
+  addNotification("Push-уведомления", "Уведомления включены для этого устройства.", "Push", "system");
+  addAudit("Push", "Пользователь включил Web Push уведомления");
+  saveState();
+  return data;
+}
+
 async function createSbpPayment(amount, purpose = "wallet_topup", taskPublicId = "") {
   return apiRequest(API_ENDPOINTS.payments, {
     method: "POST",
@@ -3090,12 +3128,14 @@ function bindEvents() {
   $("#check-location").addEventListener("change", (event) => updateChecklist("location", event.target.checked));
   $("#check-photo").addEventListener("change", (event) => updateChecklist("photo", event.target.checked));
   $("#check-comment").addEventListener("change", (event) => updateChecklist("comment", event.target.checked));
-  $("#enable-push")?.addEventListener("click", () => {
-    state.pushEnabled = true;
-    addNotification("Push-уведомления", "Демо-подписка включена. В продакшене нужна VAPID/Web Push настройка backend.", "Push", "system");
-    addAudit("Push", "Пользователь включил демо-уведомления");
-    render();
-    toast("Push-уведомления включены в демо-режиме");
+  $("#enable-push")?.addEventListener("click", async () => {
+    try {
+      await enableWebPush();
+      render();
+      toast("Push-уведомления включены");
+    } catch (error) {
+      toast(error.message || "Не удалось включить push-уведомления");
+    }
   });
 
   $("#create-form").addEventListener("submit", async (event) => {
@@ -3371,6 +3411,7 @@ async function bootstrapApp() {
   requestGeolocationPermissionOnStart();
   initMap();
   applyDraft();
+  await loadRuntimeConfig();
   await loadServerSession();
   await syncTransactionsFromBackend({ renderAfter: false });
   await syncSupportTicketsFromBackend({ renderAfter: false });

@@ -1,4 +1,4 @@
-const CACHE_NAME = "dela-ryadom-v51";
+const CACHE_NAME = "dela-ryadom-v52";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -27,4 +27,28 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).catch(() => caches.match("./index.html")))
   );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: "Дела рядом", body: event.data?.text() || "Новое уведомление" };
+  }
+  const title = payload.title || "Дела рядом";
+  const options = {
+    body: payload.body || "Есть обновление по заданию",
+    icon: "./app-icon.svg",
+    badge: "./app-icon.svg",
+    tag: payload.tag || "dela-ryadom",
+    data: { url: payload.url || "./" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "./";
+  event.waitUntil(clients.openWindow(targetUrl));
 });
