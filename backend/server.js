@@ -2791,7 +2791,7 @@ function mimeType(filePath) {
 
 function cacheControl(filePath) {
   const name = path.basename(filePath);
-  if (["index.html", "service-worker.js", "manifest.webmanifest"].includes(name)) return "no-cache";
+  if (["index.html", "app.js", "config.js", "styles.css", "service-worker.js", "manifest.webmanifest"].includes(name)) return "no-cache";
   return "public, max-age=3600";
 }
 
