@@ -386,6 +386,8 @@ async function persistPostgresDatabase(pool, data) {
 }
 
 async function syncPostgresTables(client, data) {
+  await prunePostgresTables(client, data);
+
   for (const user of Object.values(data.users)) {
     await client.query(
       `INSERT INTO users (id, auth_provider, external_id, name, username, phone, phone_verified, city, verified, roles, profile, created_at, updated_at, last_login_at)
@@ -458,6 +460,24 @@ async function syncPostgresTables(client, data) {
        ON CONFLICT (id) DO NOTHING`,
       [entry.id, entry.action || "", entry.details || "", entry.actorAccountId || "", entry.targetType || "", entry.targetId || "", entry.ip || "", JSON.stringify(entry), entry.createdAt || new Date().toISOString()],
     );
+  }
+}
+
+async function prunePostgresTables(client, data) {
+  const idMap = {
+    users: Object.keys(data.users || {}),
+    sessions: Object.keys(data.sessions || {}),
+    tasks: Object.keys(data.tasks || {}),
+    payments: Object.keys(data.payments || {}),
+    payouts: Object.keys(data.payouts || {}),
+    transactions: Object.keys(data.transactions || {}),
+    support_tickets: Object.keys(data.supportTickets || {}),
+    files: Object.keys(data.files || {}),
+    push_subscriptions: Object.keys(data.pushSubscriptions || {}),
+    audit_log: (Array.isArray(data.auditLog) ? data.auditLog : []).slice(0, 5000).map((entry) => entry.id).filter(Boolean),
+  };
+  for (const [table, ids] of Object.entries(idMap)) {
+    await client.query(`DELETE FROM ${table} WHERE NOT (id = ANY($1::text[]))`, [ids]);
   }
 }
 
@@ -1367,15 +1387,66 @@ function handleDeleteAccount(req, res) {
   const session = currentSession(req);
   const account = session?.accountId ? database.users[session.accountId] : null;
   if (!session || !account) return json(res, 401, { message: "Войдите в аккаунт, чтобы удалить его." });
+  const accountId = account.id;
   for (const [id, item] of Object.entries(database.sessions)) {
-    if (item.accountId === account.id) delete database.sessions[id];
+    if (item.accountId === accountId) delete database.sessions[id];
   }
-  delete database.users[account.id];
-  logAudit("account_deleted", account.username || account.name, req, { actorAccountId: account.id, targetType: "user", targetId: account.id });
+  for (const [id, item] of Object.entries(database.payments)) {
+    if (String(item.accountId || "") === String(accountId)) delete database.payments[id];
+  }
+  for (const [id, item] of Object.entries(database.payouts)) {
+    if (String(item.accountId || "") === String(accountId)) delete database.payouts[id];
+  }
+  for (const [id, item] of Object.entries(database.transactions)) {
+    if (String(item.accountId || "") === String(accountId)) delete database.transactions[id];
+  }
+  for (const [id, item] of Object.entries(database.files)) {
+    if (String(item.accountId || "") === String(accountId)) delete database.files[id];
+  }
+  for (const [id, item] of Object.entries(database.pushSubscriptions)) {
+    if (String(item.accountId || "") === String(accountId)) delete database.pushSubscriptions[id];
+  }
+  anonymizeAccountTasks(accountId);
+  delete database.users[accountId];
+  logAudit("account_deleted", account.username || account.name, req, { actorAccountId: accountId, targetType: "user", targetId: accountId });
   persistDatabase();
   return json(res, 200, { deleted: true }, {
     "Set-Cookie": cookie("dr_auth_session", "", 0),
   });
+}
+
+function anonymizeAccountTasks(accountId) {
+  const deletedUserLabel = "Удалённый пользователь";
+  const now = new Date().toISOString();
+  for (const task of Object.values(database.tasks)) {
+    let changed = false;
+    if (String(task.customerAccountId || task.customer?.id || "") === String(accountId)) {
+      task.customerAccountId = "";
+      task.customer = deletedUserLabel;
+      changed = true;
+    }
+    if (String(task.workerAccountId || task.worker?.id || "") === String(accountId)) {
+      task.workerAccountId = "";
+      task.worker = deletedUserLabel;
+      changed = true;
+    }
+    if (Array.isArray(task.messages)) {
+      task.messages = task.messages.map((message) => {
+        if (String(message.accountId || message.authorAccountId || "") !== String(accountId)) return message;
+        changed = true;
+        return {
+          ...message,
+          accountId: "",
+          authorAccountId: "",
+          author: deletedUserLabel,
+          photo: "",
+          photoFileId: "",
+          photoUrl: "",
+        };
+      });
+    }
+    if (changed) task.updatedAt = now;
+  }
 }
 
 function rubles(value) {
