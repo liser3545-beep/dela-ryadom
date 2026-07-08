@@ -41,6 +41,8 @@ services:
         value: ""
       - key: PAYMENT_MOCK_AUTO_CONFIRM
         value: "false"
+      - key: PAYMENT_DEMO_BANK
+        value: "true"
       - key: YOOKASSA_SHOP_ID
         value: ""
       - key: YOOKASSA_SECRET_KEY

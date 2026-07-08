@@ -512,6 +512,16 @@ function json(res, status, payload, extraHeaders = {}) {
   res.end(JSON.stringify(payload));
 }
 
+function html(res, status, body, extraHeaders = {}) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...securityHeaders(),
+    ...extraHeaders,
+  });
+  res.end(body);
+}
+
 function redirect(res, location, extraHeaders = {}) {
   res.writeHead(302, { Location: location, "Cache-Control": "no-store", ...securityHeaders(), ...extraHeaders });
   res.end();
@@ -538,6 +548,10 @@ function securityHeaders() {
     "Permissions-Policy": "geolocation=(self), camera=(self), microphone=()",
     "Content-Security-Policy": csp.join("; "),
   };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }
 
 function corsHeaders(req) {
@@ -1447,6 +1461,27 @@ function publicPayment(payment) {
   };
 }
 
+function creditPaidPayment(payment, status = "paid") {
+  if (!payment || payment.creditedAt) return null;
+  const account = database.users[payment.accountId || ""];
+  if (!account) return null;
+  payment.status = status;
+  payment.updatedAt = new Date().toISOString();
+  adjustAccountBalance(account, payment.amount);
+  payment.creditedAt = payment.updatedAt;
+  createTransaction({
+    accountId: account.id,
+    type: "topup",
+    title: `СБП через ${payment.bank || "банк"}`,
+    amount: payment.amount,
+    status: payment.demo ? "mock-paid" : "paid",
+    referenceType: "payment",
+    referenceId: payment.id,
+    createdAt: payment.creditedAt,
+  });
+  return account;
+}
+
 function publicPayout(payout) {
   return {
     id: payout.id,
@@ -2183,7 +2218,7 @@ async function handleCreatePayment(req, res) {
   };
 
   if (payment.demo) {
-    payment.paymentUrl = `${config.publicBaseUrl}/?payment=${encodeURIComponent(id)}&status=${payment.status}`;
+    payment.paymentUrl = `${config.publicBaseUrl}/demo-bank/payments/${encodeURIComponent(id)}`;
     payment.qrPayload = `ST00012|Name=Дела рядом|PersonalAcc=${id}|Sum=${amount * 100}|Purpose=${encodeURIComponent(payment.purpose)}`;
   } else if (providerStatus.provider === "yookassa") {
     if (!providerStatus.configured) {
@@ -2214,20 +2249,7 @@ async function handleCreatePayment(req, res) {
   }
 
   database.payments[id] = payment;
-  if (payment.status === "paid" && !payment.creditedAt) {
-    adjustAccountBalance(account, amount);
-    payment.creditedAt = new Date().toISOString();
-    createTransaction({
-      accountId: account.id,
-      type: "topup",
-      title: `СБП через ${payment.bank || "банк"}`,
-      amount,
-      status: payment.demo ? "mock-paid" : "paid",
-      referenceType: "payment",
-      referenceId: payment.id,
-      createdAt: payment.creditedAt,
-    });
-  }
+  if (payment.status === "paid" && !payment.creditedAt) creditPaidPayment(payment);
   persistDatabase();
   logAudit("payment_created", `Создан платёж ${id} на ${amount} ₽`, req, { targetType: "payment", targetId: id });
   broadcastEvent("payment.updated", { payment: publicPayment(payment) });
@@ -2238,6 +2260,54 @@ function handleGetPayment(req, res, paymentId) {
   const payment = database.payments[paymentId || ""];
   if (!payment) return json(res, 404, { message: "Платёж не найден." });
   return json(res, 200, { payment: publicPayment(payment), provider: paymentProviderStatus() });
+}
+
+function handleDemoBankPage(req, res, paymentId) {
+  const payment = database.payments[paymentId || ""];
+  if (!payment || !payment.demo) return notFound(res);
+  const paid = payment.status === "paid";
+  const returnUrl = `${config.publicBaseUrl}/?screen=profile&payment=${encodeURIComponent(payment.id)}&status=${encodeURIComponent(payment.status)}`;
+  return html(res, 200, `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Демо-банк — оплата СБП</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at top, #f3e8ff, #f8fafc 45%, #eef2ff); color: #1e1b4b; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .card { width: min(92vw, 460px); background: rgba(255,255,255,.94); border: 1px solid rgba(109,40,217,.16); border-radius: 28px; box-shadow: 0 28px 80px rgba(76,29,149,.2); padding: 28px; }
+    .badge { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: #ede9fe; color: #5b21b6; font-weight: 800; font-size: 13px; }
+    h1 { margin: 18px 0 8px; font-size: 28px; } p { color: #51456f; line-height: 1.55; }
+    .amount { margin: 22px 0; padding: 20px; border-radius: 22px; background: #faf5ff; border: 1px solid #e9d5ff; }
+    .amount small { display: block; color: #7c3aed; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+    .amount strong { display: block; margin-top: 6px; font-size: 36px; }
+    button, a.button { width: 100%; box-sizing: border-box; border: 0; border-radius: 18px; padding: 16px 18px; font-size: 16px; font-weight: 900; cursor: pointer; text-decoration: none; text-align: center; display: block; }
+    button { color: white; background: linear-gradient(135deg, #7c3aed, #4c1d95); box-shadow: 0 18px 35px rgba(91,33,182,.26); }
+    a.button { margin-top: 12px; color: #4c1d95; background: #ede9fe; }
+    .ok { padding: 14px 16px; border-radius: 18px; background: #dcfce7; color: #166534; font-weight: 800; }
+    .muted { margin-top: 14px; font-size: 13px; color: #7c6f93; }
+  </style>
+</head>
+<body><main class="card">
+  <span class="badge">Демо-банк · СБП</span>
+  <h1>${paid ? "Платёж уже оплачен" : "Подтвердите оплату"}</h1>
+  <p>Это безопасный демо-экран банка для MVP. Реальные деньги не списываются, но backend зачислит сумму на баланс аккаунта.</p>
+  <div class="amount"><small>К зачислению</small><strong>${escapeHtml(payment.amount.toLocaleString("ru-RU"))} ₽</strong></div>
+  ${paid ? `<div class="ok">Деньги уже зачислены на баланс.</div><a class="button" href="${escapeHtml(returnUrl)}">Вернуться в приложение</a>` : `<form method="post" action="/demo-bank/payments/${encodeURIComponent(payment.id)}/confirm"><button type="submit">Оплатить в демо-банке</button></form><a class="button" href="${escapeHtml(config.publicBaseUrl)}/?screen=profile">Отмена</a>`}
+  <div class="muted">Платёж: ${escapeHtml(payment.id)} · Банк: ${escapeHtml(payment.bank || "demo")}</div>
+</main></body></html>`);
+}
+
+function handleDemoBankConfirm(req, res, paymentId) {
+  const payment = database.payments[paymentId || ""];
+  if (!payment || !payment.demo) return notFound(res);
+  if (payment.status !== "paid") {
+    creditPaidPayment(payment, "paid");
+    persistDatabase();
+    logAudit("payment_demo_confirmed", `Демо-платёж ${payment.id} подтверждён`, req, { targetType: "payment", targetId: payment.id });
+    broadcastEvent("payment.updated", { payment: publicPayment(payment) });
+  }
+  return redirect(res, `${config.publicBaseUrl}/?screen=profile&payment=${encodeURIComponent(payment.id)}&status=paid`);
 }
 
 async function handlePaymentWebhook(req, res) {
@@ -2262,23 +2332,7 @@ async function handlePaymentWebhook(req, res) {
       test: Boolean(providerObject?.test),
     };
   }
-  if (payment.status === "paid" && previousStatus !== "paid" && !payment.creditedAt) {
-    const account = database.users[payment.accountId || ""];
-    if (account) {
-      adjustAccountBalance(account, payment.amount);
-      payment.creditedAt = payment.updatedAt;
-      createTransaction({
-        accountId: account.id,
-        type: "topup",
-        title: `СБП через ${payment.bank || "банк"}`,
-        amount: payment.amount,
-        status: payment.demo ? "mock-paid" : "paid",
-        referenceType: "payment",
-        referenceId: payment.id,
-        createdAt: payment.creditedAt,
-      });
-    }
-  }
+  if (payment.status === "paid" && previousStatus !== "paid" && !payment.creditedAt) creditPaidPayment(payment, "paid");
   persistDatabase();
   logAudit("payment_webhook", `Платёж ${payment.id} обновлён до ${payment.status}`, req, { targetType: "payment", targetId: payment.id });
   broadcastEvent("payment.updated", { payment: publicPayment(payment) });
@@ -2731,6 +2785,11 @@ async function handleRequest(req, res) {
     const taskMessageMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/messages$/);
     if (taskMessageMatch && (req.method === "GET" || req.method === "POST")) return handleTaskMessages(req, res, decodeURIComponent(taskMessageMatch[1]));
     if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/tasks") return handleTasks(req, res);
+
+    const demoBankConfirmMatch = url.pathname.match(/^\/demo-bank\/payments\/([^/]+)\/confirm$/);
+    if (demoBankConfirmMatch && req.method === "POST") return handleDemoBankConfirm(req, res, decodeURIComponent(demoBankConfirmMatch[1]));
+    const demoBankMatch = url.pathname.match(/^\/demo-bank\/payments\/([^/]+)$/);
+    if (demoBankMatch && req.method === "GET") return handleDemoBankPage(req, res, decodeURIComponent(demoBankMatch[1]));
 
     if (req.method === "POST" && url.pathname === "/api/payments") return handleCreatePayment(req, res);
     if (req.method === "GET" && url.pathname.startsWith("/api/payments/")) return handleGetPayment(req, res, decodeURIComponent(url.pathname.split("/").pop() || ""));
