@@ -62,11 +62,11 @@ services:
       - key: ESIA_USERINFO_URL
         value: ""
       - key: SMS_PROVIDER
-        value: disabled
+        value: textbelt
       - key: SMS_API_KEY
-        value: ""
+        value: textbelt
       - key: SMS_SENDER
-        value: ""
+        value: Dela Ryadom
       - key: VAPID_PUBLIC_KEY
         value: ""
       - key: VAPID_PRIVATE_KEY

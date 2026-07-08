@@ -2361,7 +2361,18 @@ async function handleSmsStart(req, res) {
   persistDatabase();
   logAudit("sms_requested", `Запрошен SMS-код для ${phoneMask(phone)}`, req, { targetType: "sms", targetId: codeId });
   if (status.configured) {
-    return json(res, 501, { message: "SMS-провайдер сконфигурирован, но adapter отправки ещё нужно подключить под выбранный API.", verificationId: codeId, provider: status });
+    const sent = await sendSmsCode(phone, code);
+    if (!sent.ok) {
+      delete database.smsCodes[codeId];
+      persistDatabase();
+      logAudit("sms_send_failed", `${phoneMask(phone)} · ${sent.message || "provider rejected request"}`, req, { targetType: "sms", targetId: codeId });
+      return json(res, 502, { message: "SMS-провайдер не отправил код. Попробуйте позже или используйте push.", provider: { ...status, error: sent.message || "send_failed" } });
+    }
+    database.smsCodes[codeId].status = "sent";
+    database.smsCodes[codeId].provider = sent.provider || status.provider;
+    database.smsCodes[codeId].providerMessageId = sent.textId || "";
+    persistDatabase();
+    return json(res, 202, { verificationId: codeId, expiresInSeconds: 300, provider: { ...status, quotaRemaining: sent.quotaRemaining }, message: "SMS-код отправлен." });
   }
   return json(res, 202, {
     verificationId: codeId,
