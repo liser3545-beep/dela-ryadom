@@ -1,4 +1,4 @@
-const CACHE_NAME = "dela-ryadom-v55";
+const CACHE_NAME = "dela-ryadom-v56";
 const APP_SHELL = [
   "./",
   "./index.html",

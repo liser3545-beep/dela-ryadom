@@ -478,8 +478,8 @@ function normalizeTask(task, account = null) {
     hidePhone: true,
     workerDeposit: 0,
     dispute: false,
-    moderationStatus: "pending",
-    moderationNote: "Ждёт проверки модератором",
+    moderationStatus: "approved",
+    moderationNote: "Опубликовано автоматически после серверной проверки",
     priority: "normal",
     proofPhotos: [],
     disputeStatus: "none",
@@ -3193,8 +3193,8 @@ function bindEvents() {
     task.deadlineType = $("#deadline").value;
     task.deadlineAt = exactTime ? new Date(exactTime).toISOString() : null;
     task.hidePhone = $("#hide-phone").checked;
-    task.moderationStatus = isModerator() ? "approved" : "pending";
-    task.moderationNote = isModerator() ? "Опубликовано модератором" : "Ждёт проверки модератором";
+    task.moderationStatus = "approved";
+    task.moderationNote = isModerator() ? "Опубликовано модератором" : "Опубликовано автоматически после серверной проверки";
     state.tasks.unshift(task);
     state.activeTaskId = task.id;
     addAudit("Создание задания", `${task.publicId} · ${task.title} · ${task.moderationNote}`);
@@ -3213,7 +3213,7 @@ function bindEvents() {
     clearDraft();
     render();
     setScreen("home");
-    toast(task.moderationStatus === "approved" ? `${task.publicId}: ${money(totalEscrow(task))} списаны в эскроу` : `${task.publicId}: задание ждёт проверки модератором`);
+    toast(`${task.publicId}: задание опубликовано, ${money(totalEscrow(task))} списаны в эскроу`);
   });
 
   $("#start").addEventListener("click", async () => {

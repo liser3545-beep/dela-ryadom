@@ -2089,8 +2089,8 @@ async function handleTasks(req, res) {
     if (!existing) {
       incoming.customerAccountId = account.id;
       incoming.customer = incoming.customer || account.name || account.username || "Пользователь";
-      incoming.moderationStatus = isModeratorAccount(account) ? (incoming.moderationStatus || "approved") : "pending";
-      incoming.moderationNote = incoming.moderationStatus === "approved" ? "Опубликовано модератором" : "Ждёт проверки модератором";
+      incoming.moderationStatus = isModeratorAccount(account) ? (incoming.moderationStatus || "approved") : "approved";
+      incoming.moderationNote = isModeratorAccount(account) && incoming.moderationStatus === "approved" ? "Опубликовано модератором" : "Опубликовано автоматически после серверной проверки";
       const escrowTotal = taskEscrowTotal(incoming);
       if (rubles(account.balance) < escrowTotal) return json(res, 409, { message: `На балансе недостаточно средств для эскроу ${escrowTotal} ₽.` });
       adjustAccountBalance(account, -escrowTotal);
