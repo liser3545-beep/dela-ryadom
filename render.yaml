@@ -10,9 +10,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: PUBLIC_BASE_URL
-        sync: false
+        value: https://dela-ryadom.onrender.com
       - key: FRONTEND_ALLOWED_ORIGIN
-        sync: false
+        value: https://dela-ryadom.onrender.com
       - key: COOKIE_SECRET
         generateValue: true
       - key: COOKIE_SAME_SITE
@@ -24,8 +24,8 @@ services:
       - key: PAYMENT_MOCK_AUTO_CONFIRM
         value: "false"
       - key: ESIA_CLIENT_ID
-        sync: false
+        value: ""
       - key: ESIA_CLIENT_SECRET
-        sync: false
+        value: ""
       - key: ESIA_REDIRECT_URI
-        sync: false
+        value: https://dela-ryadom.onrender.com/api/auth/esia/callback
