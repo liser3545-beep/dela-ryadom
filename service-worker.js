@@ -1,4 +1,4 @@
-const CACHE_NAME = "dela-ryadom-v52";
+const CACHE_NAME = "dela-ryadom-v53";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -24,6 +24,20 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (new URL(event.request.url).origin !== self.location.origin) return;
+  const requestPath = new URL(event.request.url).pathname;
+  const networkFirst = event.request.mode === "navigate" || ["/", "/index.html", "/app.js", "/config.js", "/service-worker.js"].includes(requestPath);
+  if (networkFirst) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).catch(() => caches.match("./index.html")))
   );

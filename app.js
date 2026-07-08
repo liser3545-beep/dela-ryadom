@@ -2,6 +2,7 @@ const STORAGE_KEY = "dela-ryadom-state-v6";
 const DRAFT_KEY = "dela-ryadom-create-draft-v1";
 const DEVICE_ACCOUNT_KEY = "dela-ryadom-device-account-v1";
 const LEGACY_STORAGE_KEYS = ["dela-ryadom-state-v2", "dela-ryadom-state-v3", "dela-ryadom-state-v4", "dela-ryadom-state-v5"];
+const STORAGE_READ_KEYS = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS.slice().reverse()];
 const APP_CONFIG = globalThis.DELA_RYADOM_CONFIG || {};
 const API_BASE_URL = trimTrailingSlash(APP_CONFIG.API_BASE_URL || "");
 const API_ENDPOINTS = {
@@ -74,6 +75,15 @@ const labels = {
 const step = { accepted: 0, progress: 1, revision: 1, review: 2, done: 3 };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const on = (selector, eventName, handler, options) => {
+  const element = $(selector);
+  if (!element) {
+    console.warn(`Не найден элемент ${selector} для события ${eventName}`);
+    return null;
+  }
+  element.addEventListener(eventName, handler, options);
+  return element;
+};
 const money = (value) => `${Number(value || 0).toLocaleString("ru-RU")} ₽`;
 const rubles = (value) => Math.max(0, Math.round(Number(value || 0)));
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
@@ -131,8 +141,13 @@ let accountFormMode = "register";
 let pendingCommunityAgreementResolve = null;
 let csrfToken = "";
 
-clearLegacyState();
 const state = loadState() || createInitialState();
+try {
+  saveState();
+} catch (error) {
+  console.warn("Не удалось сохранить локальное состояние", error);
+}
+clearLegacyState();
 
 function createInitialState() {
   return {
@@ -316,13 +331,13 @@ function notificationItem(title, text, reason = "Обновление", type = "
 
 function clearLegacyState() {
   try {
-    LEGACY_STORAGE_KEYS.filter((key) => !["dela-ryadom-state-v3", "dela-ryadom-state-v4"].includes(key)).forEach((key) => localStorage.removeItem(key));
+    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   } catch {}
 }
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("dela-ryadom-state-v4") || localStorage.getItem("dela-ryadom-state-v3");
+    const raw = STORAGE_READ_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (!raw) {
       const deviceAccount = loadDeviceAccount();
       if (!deviceAccount) return null;
@@ -3400,20 +3415,27 @@ if ("serviceWorker" in navigator) {
 }
 
 async function bootstrapApp() {
-  bindEvents();
-  requestGeolocationPermissionOnStart();
-  initMap();
-  applyDraft();
-  await loadRuntimeConfig();
-  await loadServerSession();
-  await syncTransactionsFromBackend({ renderAfter: false });
-  await syncSupportTicketsFromBackend({ renderAfter: false });
-  render();
-  setScreen(state.screen || "home");
-  completeProviderLogin();
-  refreshEsiaStatus();
-  startTaskSync();
-  startTimer();
+  try {
+    bindEvents();
+    requestGeolocationPermissionOnStart();
+    initMap();
+    applyDraft();
+    await loadRuntimeConfig();
+    await loadServerSession();
+    await syncTransactionsFromBackend({ renderAfter: false });
+    await syncSupportTicketsFromBackend({ renderAfter: false });
+    render();
+    setScreen(state.screen || "home");
+    completeProviderLogin();
+    refreshEsiaStatus();
+    startTaskSync();
+    startTimer();
+  } catch (error) {
+    console.error("Ошибка запуска приложения", error);
+    logError("Запуск приложения", error.message || String(error));
+    if ($("#map-status")) $("#map-status").textContent = "Приложение обновилось. Перезагрузите страницу, если данные не появились.";
+    try { render(); } catch {}
+  }
 }
 
 bootstrapApp();
