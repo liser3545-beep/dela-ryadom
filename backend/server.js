@@ -690,6 +690,60 @@ function broadcastEvent(type, payload = {}) {
   }
 }
 
+function notifyTaskParticipants(task, actorAccountId = "", title = "Дела рядом", body = "Есть обновление", data = {}) {
+  const status = pushProviderStatus();
+  if (!status.configured || !task) return;
+
+  const actorId = String(actorAccountId || "");
+  const participantIds = new Set(taskParticipantIds(task).filter((id) => id && id !== actorId));
+  if (!participantIds.size) return;
+
+  const subscriptions = Object.entries(database.pushSubscriptions || {}).filter(([, item]) => {
+    return item?.enabled && participantIds.has(String(item.accountId || "")) && item.subscription?.endpoint;
+  });
+  if (!subscriptions.length) return;
+
+  let payload = "";
+  try {
+    webPush.setVapidDetails(config.push.vapidSubject, config.push.vapidPublicKey, config.push.vapidPrivateKey);
+    payload = JSON.stringify({
+      title: String(title || "Дела рядом").slice(0, 120),
+      body: String(body || "Есть обновление").slice(0, 240),
+      data: { ...data, taskId: data.taskId || task.id || "", publicId: task.publicId || "" },
+    });
+  } catch (error) {
+    logAudit("push_notify_failed", `Push не настроен корректно: ${String(error?.message || error).slice(0, 300)}`, null, { targetType: "task", targetId: task.id || "" });
+    return;
+  }
+
+  let staleDeleted = false;
+  const deliveries = subscriptions.map(([id, item]) => {
+    return Promise.resolve()
+      .then(() => webPush.sendNotification(item.subscription, payload))
+      .then(() => null)
+      .catch((error) => {
+        const statusCode = Number(error?.statusCode || error?.status || 0);
+        if (statusCode === 404 || statusCode === 410) {
+          delete database.pushSubscriptions[id];
+          staleDeleted = true;
+        }
+        return { id, statusCode, message: String(error?.message || error).slice(0, 300) };
+      });
+  });
+
+  Promise.all(deliveries)
+    .then((results) => {
+      const failed = results.filter(Boolean);
+      if (staleDeleted) persistDatabase();
+      if (failed.length) {
+        logAudit("push_notify_failed", `${failed.length}/${subscriptions.length} push-уведомлений не доставлены`, null, { targetType: "task", targetId: task.id || "" });
+      }
+    })
+    .catch((error) => {
+      logAudit("push_notify_failed", `Ошибка отправки push: ${String(error?.message || error).slice(0, 300)}`, null, { targetType: "task", targetId: task.id || "" });
+    });
+}
+
 function currentSession(req) {
   cleanupStores();
   const sessionId = verifySignedSessionId(parseCookies(req).dr_auth_session);
