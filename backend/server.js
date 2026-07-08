@@ -1997,6 +1997,7 @@ function upsertTask(task) {
     ...task,
     id,
     publicId: publicIdTaken ? nextTaskPublicId() : task.publicId || existing?.publicId || nextTaskPublicId(),
+    status: task.status || existing?.status || "open",
     createdAt: task.createdAt || existing?.createdAt || now,
     updatedAt: now,
   };
