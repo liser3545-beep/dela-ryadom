@@ -882,7 +882,7 @@ async function logoutAccount() {
   setAccountFormMode("login");
   render();
   setScreen("register");
-  toast("Вы вышли. Чтобы вернуться, нажмите «Войти»");
+  toast("Вы вышли. Можно войти снова или зарегистрировать новый аккаунт");
 }
 
 function ratingValue(role) {
@@ -2107,13 +2107,14 @@ function renderRole() {
       ? `${accountName()} · аккаунт заблокирован модератором · контакты, задания и чаты недоступны`
       : `${accountName()} · ${state.account.city || "город не указан"} · ${state.account.phoneVerified ? "телефон подтверждён" : "телефон не подтверждён"} · ${signedIn ? "вход выполнен" : "вы вышли"}`
     : "Зарегистрируйтесь, чтобы создать профиль";
-  $("#edit-account").textContent = state.account.registered ? "Редактировать аккаунт" : "Регистрация";
+  $("#edit-account").textContent = signedIn ? "Редактировать аккаунт" : "Регистрация";
   $("#logout-account").hidden = !signedIn;
   if (!isEditingAccountForm()) {
-    $("#register-name").value = state.account.name === "Пользователь" && !state.account.registered ? "" : state.account.name;
-    $("#register-username").value = state.account.username || "";
-    $("#register-phone").value = state.account.phone;
-    $("#register-city").value = state.account.city;
+    const showExistingAccount = signedIn || accountFormMode === "login" || accountFormMode === "recover";
+    $("#register-name").value = showExistingAccount && !(state.account.name === "Пользователь" && !state.account.registered) ? state.account.name : "";
+    $("#register-username").value = showExistingAccount ? (state.account.username || "") : "";
+    $("#register-phone").value = showExistingAccount ? state.account.phone : "";
+    $("#register-city").value = showExistingAccount ? state.account.city : "";
   }
   $("#register-status").textContent = state.account.registered
     ? accountFormMode === "recover"
@@ -2598,8 +2599,8 @@ function bindEvents() {
     const city = $("#register-city").value.trim();
     const loginMode = accountFormMode === "login";
     const recoveryMode = accountFormMode === "recover";
-    const editMode = !loginMode && !recoveryMode && state.account.registered;
-    const phoneAlreadyVerified = !loginMode && !recoveryMode && state.account.phoneVerified && state.account.phone === phone;
+    const editMode = !loginMode && !recoveryMode && isSignedIn();
+    const phoneAlreadyVerified = editMode && state.account.phoneVerified && state.account.phone === phone;
     if (!recoveryMode && !username) return toast(loginMode ? "Введите юзернейм для входа" : "Введите юзернейм");
     if ((loginMode || recoveryMode || !editMode) && (!password || password.length < 4)) return toast(recoveryMode ? "Придумайте новый пароль минимум из 4 символов" : loginMode ? "Введите пароль от аккаунта" : "Придумайте пароль минимум из 4 символов");
     if (editMode && password && password.length < 4) return toast("Новый пароль должен быть минимум из 4 символов");
@@ -2692,8 +2693,8 @@ function bindEvents() {
     if (!phoneAlreadyVerified && !smsCode) return toast("Введите код из SMS или push-уведомления");
     if (!loginMode && city.length < 2) return toast("Укажите город, чтобы видеть задания рядом");
 
-    const needsAgreement = !loginMode && state.account.communityAgreementVersion !== COMMUNITY_AGREEMENT_VERSION;
-    let communityAgreementAcceptedAt = state.account.communityAgreementAcceptedAt || "";
+    const needsAgreement = !loginMode && (!editMode || state.account.communityAgreementVersion !== COMMUNITY_AGREEMENT_VERSION);
+    let communityAgreementAcceptedAt = editMode ? (state.account.communityAgreementAcceptedAt || "") : "";
     if (needsAgreement) {
       const accepted = await showCommunityAgreement();
       if (!accepted) return toast("Регистрация отменена: необходимо принять правила сообщества");
