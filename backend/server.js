@@ -76,8 +76,9 @@ const config = {
   },
   sms: {
     provider: (process.env.SMS_PROVIDER || "disabled").toLowerCase(),
-    apiKey: process.env.SMS_API_KEY || "",
-    sender: process.env.SMS_SENDER || "",
+    apiKey: process.env.SMS_API_KEY || (process.env.SMS_PROVIDER === "textbelt" ? "textbelt" : ""),
+    sender: process.env.SMS_SENDER || "Dela Ryadom",
+    freeFallbackCode: process.env.SMS_FREE_FALLBACK_CODE !== "false",
   },
   push: {
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY || "",
@@ -717,9 +718,11 @@ function providerStatus() {
 }
 
 function smsProviderStatus() {
-  const configured = config.sms.provider !== "disabled" && Boolean(config.sms.apiKey && config.sms.sender);
+  const configured = config.sms.provider === "textbelt"
+    ? Boolean(config.sms.apiKey)
+    : config.sms.provider !== "disabled" && Boolean(config.sms.apiKey && config.sms.sender);
   const devMode = !configured && process.env.NODE_ENV !== "production";
-  return { provider: config.sms.provider, configured, devMode, mode: configured ? "production-ready" : devMode ? "dev-code" : "disabled" };
+  return { provider: config.sms.provider, configured, devMode, freeFallbackCode: config.sms.freeFallbackCode, mode: configured ? "production-ready" : devMode ? "dev-code" : "disabled" };
 }
 
 function pushProviderStatus() {
@@ -903,7 +906,46 @@ function requireCsrf(req, res, url) {
 function normalizePhone(value) {
   const phone = String(value || "").replace(/[^0-9+]/g, "");
   if (phone.startsWith("+")) return `+${phone.slice(1).replace(/\D/g, "")}`;
-  return phone.replace(/\D/g, "");
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("8")) return `+7${digits.slice(1)}`;
+  if (digits.length === 11 && digits.startsWith("7")) return `+${digits}`;
+  if (digits.length === 10) return `+7${digits}`;
+  return digits;
+}
+
+async function sendSmsCode(phone, code) {
+  const status = smsProviderStatus();
+  if (!status.configured) return { ok: false, status, message: "SMS provider is not configured." };
+  if (config.sms.provider === "textbelt") return sendTextbeltSms(phone, code);
+  return { ok: false, status, message: `SMS provider ${config.sms.provider} adapter is not implemented.` };
+}
+
+async function sendTextbeltSms(phone, code) {
+  const params = new URLSearchParams();
+  params.set("phone", phone);
+  params.set("message", `Код Дела рядом: ${code}. Никому не сообщайте этот код.`);
+  params.set("key", config.sms.apiKey || "textbelt");
+  if (config.sms.sender) params.set("sender", config.sms.sender);
+  const response = await fetch("https://textbelt.com/text", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    return {
+      ok: false,
+      provider: "textbelt",
+      message: data.error || `Textbelt rejected SMS request with HTTP ${response.status}`,
+      quotaRemaining: data.quotaRemaining,
+    };
+  }
+  return {
+    ok: true,
+    provider: "textbelt",
+    textId: data.textId || "",
+    quotaRemaining: data.quotaRemaining,
+  };
 }
 
 function phoneMask(phone) {
@@ -2363,9 +2405,21 @@ async function handleSmsStart(req, res) {
   if (status.configured) {
     const sent = await sendSmsCode(phone, code);
     if (!sent.ok) {
+      logAudit("sms_send_failed", `${phoneMask(phone)} · ${sent.message || "provider rejected request"}`, req, { targetType: "sms", targetId: codeId });
+      if (config.sms.freeFallbackCode) {
+        database.smsCodes[codeId].status = "fallback-code";
+        database.smsCodes[codeId].provider = sent.provider || status.provider;
+        persistDatabase();
+        return json(res, 202, {
+          verificationId: codeId,
+          devCode: code,
+          expiresInSeconds: 300,
+          provider: { ...status, fallback: true, error: sent.message || "send_failed" },
+          message: "Бесплатная SMS-доставка не сработала, поэтому временный код показан на экране.",
+        });
+      }
       delete database.smsCodes[codeId];
       persistDatabase();
-      logAudit("sms_send_failed", `${phoneMask(phone)} · ${sent.message || "provider rejected request"}`, req, { targetType: "sms", targetId: codeId });
       return json(res, 502, { message: "SMS-провайдер не отправил код. Попробуйте позже или используйте push.", provider: { ...status, error: sent.message || "send_failed" } });
     }
     database.smsCodes[codeId].status = "sent";

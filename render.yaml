@@ -67,6 +67,8 @@ services:
         value: textbelt
       - key: SMS_SENDER
         value: Dela Ryadom
+      - key: SMS_FREE_FALLBACK_CODE
+        value: "true"
       - key: VAPID_PUBLIC_KEY
         value: ""
       - key: VAPID_PRIVATE_KEY
