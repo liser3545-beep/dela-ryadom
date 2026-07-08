@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# После подключения постоянного HTTPS-домена добавьте абсолютный sitemap, например:
+# Sitemap: https://your-domain.example/sitemap.xml

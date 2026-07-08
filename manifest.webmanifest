@@ -1,0 +1,20 @@
+{
+  "name": "Дела рядом",
+  "short_name": "Дела рядом",
+  "description": "Приложение для быстрых заданий рядом и онлайн.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf8ff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"]
+}

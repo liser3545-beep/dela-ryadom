@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+node_modules
+npm-debug.log*
+dela-ryadom-site.zip
+dela-ryadom-full-with-backend.zip
+*.zip
+android-apk
+.git
+.gitignore
+backend/data

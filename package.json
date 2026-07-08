@@ -1,0 +1,17 @@
+{
+  "name": "dela-ryadom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static PWA plus backend-ready OAuth server for Дела рядом.",
+  "scripts": {
+    "start": "node backend/server.js",
+    "check": "node --check app.js && node --check backend/server.js && node --check backend/migrate.js",
+    "db:migrate": "node backend/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

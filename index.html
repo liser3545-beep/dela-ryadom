@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="description" content="Дела рядом — PWA для быстрых локальных и онлайн-заданий: фото, покупки, документы, помощь по дому и поддержка безопасной сделки." />
+    <meta name="keywords" content="дела рядом, задания рядом, микрозадания, фотозадание, помощь рядом, PWA" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Дела рядом — быстрые задания рядом" />
+    <meta property="og:description" content="Создавайте задания, находите исполнителей рядом, общайтесь в чате и используйте демо безопасной сделки." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:image" content="app-icon.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Дела рядом" />
+    <meta name="twitter:description" content="PWA для быстрых заданий рядом и онлайн." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Дела рядом" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Дела рядом</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="app-icon.svg" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="topbar">
+        <div>
+          <span class="caption" id="role-caption">Заказчик</span>
+          <h1 id="screen-title">Дела рядом</h1>
+        </div>
+        <div class="top-actions">
+          <button class="login-chip" id="login-button" type="button">Войти</button>
+          <button class="account-chip" id="account-button" type="button">Регистрация</button>
+          <button class="round-button quiet" id="notification-button" type="button" aria-label="Уведомления">
+            <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9.8a6 6 0 1 0-12 0c0 7-2.2 7-2.2 7h16.4s-2.2 0-2.2-7" /><path d="M9.8 20a2.4 2.4 0 0 0 4.4 0" /></svg>
+            <span id="notification-badge">3</span>
+          </button>
+          <button class="round-button" id="install-button" type="button" hidden aria-label="Установить приложение">
+            <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10" /><path d="m8 10 4 4 4-4" /><path d="M5 19h14" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="role-tabs" aria-label="Роль пользователя">
+        <button class="active" data-role="customer" type="button">Заказчик</button>
+        <button data-role="worker" type="button">Исполнитель</button>
+      </div>
+
+      <main class="content">
+        <section class="screen active" id="screen-home" data-title="Дела рядом">
+          <article class="landing-card">
+            <span class="caption">Сервис рядом</span>
+            <h2>Быстрые задания в вашем районе</h2>
+            <p>Публикуйте поручения, находите исполнителей рядом, фиксируйте фотоотчёт, оплату и спор внутри приложения.</p>
+            <div class="landing-grid">
+              <div><b>Эскроу</b><span>Деньги удерживаются до приёмки.</span></div>
+              <div><b>Модерация</b><span>Задания, жалобы и пользователи под контролем.</span></div>
+              <div><b>PWA/APK</b><span>Работает как приложение и готово к Android-обёртке.</span></div>
+            </div>
+          </article>
+          <article class="smart-card" id="smart-card">
+            <div>
+              <span class="caption">Рекомендация</span>
+              <h2 id="smart-title">Создайте первое задание за минуту</h2>
+              <p id="smart-text">Опишите задачу, укажите адрес и бюджет — сумма будет заморожена в эскроу.</p>
+            </div>
+            <button class="primary small" id="smart-action" type="button">Начать</button>
+          </article>
+
+          <div class="map-panel">
+            <div class="map-head">
+              <strong>Карта заданий</strong>
+              <span id="map-subtitle">Ваши активные поручения</span>
+            </div>
+            <div class="map" id="task-map" aria-label="Карта заданий"></div>
+            <div class="map-status" id="map-status">Загрузка карты…</div>
+          </div>
+
+          <div class="stats">
+            <article><span>Рейтинг</span><b id="rating">0</b></article>
+            <article><span>Баланс</span><b id="balance">0 ₽</b></article>
+            <article><span>Активно</span><b id="active-count">0</b></article>
+          </div>
+
+          <div class="section-title">
+            <h2 id="home-list-title">Мои задания</h2>
+            <button class="text-button" id="show-list" type="button">Все</button>
+          </div>
+          <div class="task-list" id="home-tasks"></div>
+
+          <div class="section-title">
+            <h2>Активность</h2>
+            <button class="text-button" id="clear-activity" type="button">Очистить</button>
+          </div>
+          <div class="activity-list" id="activity-list"></div>
+        </section>
+
+        <section class="screen" id="screen-create" data-title="Создать задание">
+          <form class="card form" id="create-form">
+            <label>
+              Сложность
+              <select id="complexity">
+                <option value="30">Простое · до 30 мин</option>
+                <option value="60">Среднее · 1 час</option>
+                <option value="180">Сложное · до 3 часов</option>
+              </select>
+            </label>
+            <label>
+              Название
+              <input id="title" required placeholder="Что нужно сделать?" />
+            </label>
+            <label>
+              Описание
+              <textarea id="description" rows="4" required placeholder="Опишите задачу подробнее"></textarea>
+            </label>
+            <div class="suggestion-panel" id="category-suggestion" hidden></div>
+            <label>
+              Категория
+              <select id="category">
+                <option>Фотозадание</option>
+                <option>Онлайн-проверка</option>
+                <option>Шопинг-помощник</option>
+                <option>Уборка и помощь дома</option>
+                <option>IT и настройка</option>
+                <option>Питомцы</option>
+                <option>Ремонт и мастер</option>
+                <option>Документы и ТЗ</option>
+              </select>
+            </label>
+            <div class="category-guide" aria-label="Подсказки по категориям">
+              <span>Фото от 150 ₽</span>
+              <span>Онлайн можно без адреса</span>
+            </div>
+            <div class="grid-2">
+              <label>
+                Адрес
+                <input id="address" required list="address-suggestions" placeholder="Адрес или место выполнения" />
+                <datalist id="address-suggestions"></datalist>
+              </label>
+              <label>
+                Оплата исполнителю
+                <input id="price" type="number" min="0" step="1" required value="0" />
+              </label>
+            </div>
+            <div class="suggestion-panel" id="price-hint">Укажите категорию и описание — подскажем среднюю стоимость.</div>
+            <label>
+              Когда выполнить
+              <select id="deadline">
+                <option value="urgent">Срочно · прямо сейчас</option>
+                <option value="today">Сегодня</option>
+                <option value="weekend">В выходные</option>
+                <option value="exact">Указать точное время</option>
+              </select>
+            </label>
+            <label id="exact-time-label" class="hidden">
+              Точное время
+              <input id="exact-time" type="datetime-local" />
+            </label>
+            <div class="location-picker">
+              <button class="secondary" type="button" id="pick-location"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" /><path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z" /></svg>Выбрать точку на карте</button>
+              <button class="secondary" type="button" id="geocode-address">Найти адрес</button>
+              <span id="picked-location">Точка не выбрана</span>
+            </div>
+            <label class="check-row">
+              <input id="online" type="checkbox" />
+              <span>Можно выполнить онлайн</span>
+            </label>
+            <input class="hidden" id="reference-files" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.txt" multiple />
+            <button class="upload" type="button" id="attach-reference"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 12.5-7.5 7.5a5 5 0 0 1-7.1-7.1l8.4-8.4a3.4 3.4 0 0 1 4.8 4.8l-8.4 8.4a1.8 1.8 0 1 1-2.5-2.5l7.5-7.5" /></svg>Добавить фото/видео/документ</button>
+            <div class="attachment-list" id="attachment-list">Файлы не прикреплены</div>
+            <div class="privacy-box">
+              <label class="check-row"><input id="hide-phone" type="checkbox" checked /> <span>Скрыть телефон, связь только в чате</span></label>
+            </div>
+            <div class="draft-note" id="draft-status">Черновик сохраняется автоматически на этом устройстве.</div>
+            <div class="escrow"><svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2" /><path d="M6.5 10h11A1.5 1.5 0 0 1 19 11.5v7A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-7A1.5 1.5 0 0 1 6.5 10Z" /></svg><span id="escrow-text">500 ₽ будут заморожены при публикации</span><small>Выплата исполнителю доступна только после приемки заказчиком. При споре включается арбитраж.</small></div>
+            <button class="primary" type="submit">Опубликовать</button>
+          </form>
+        </section>
+
+        <section class="screen" id="screen-feed" data-title="Лента заданий">
+          <label class="search-field">
+            <span>Поиск задания</span>
+            <input id="search" placeholder="Фото, покупки, онлайн..." />
+          </label>
+          <div class="feed-summary" id="feed-summary"></div>
+          <div class="filters">
+            <button class="active" data-filter="all" type="button">Все</button>
+            <button data-filter="near" type="button">Рядом</button>
+            <button data-filter="online" type="button">Онлайн</button>
+            <button data-filter="price" type="button">Дороже</button>
+          </div>
+          <div class="advanced-filters">
+            <label>
+              Категория
+              <select id="category-filter">
+                <option value="all">Все категории</option>
+                <option>Фотозадание</option>
+                <option>Онлайн-проверка</option>
+                <option>Шопинг-помощник</option>
+                <option>Уборка и помощь дома</option>
+                <option>IT и настройка</option>
+                <option>Питомцы</option>
+                <option>Документы и ТЗ</option>
+              </select>
+            </label>
+            <label>
+              Цена от
+              <input id="min-price-filter" type="number" min="0" step="50" placeholder="300" />
+            </label>
+            <label>
+              До, км
+              <input id="distance-filter" type="number" min="0" step="0.5" placeholder="5" />
+            </label>
+          </div>
+          <div class="task-list" id="feed-tasks"></div>
+        </section>
+
+        <section class="screen" id="screen-my" data-title="Мои задания">
+          <article class="card my-tasks-head">
+            <span class="caption">Рабочий стол</span>
+            <h2>Мои задания</h2>
+            <p id="my-tasks-summary">Активные, на приёмке, завершённые, споры и черновики — в одном месте.</p>
+          </article>
+          <div class="filters my-tabs" aria-label="Фильтр моих заданий">
+            <button class="active" data-my-filter="active" type="button">Активные</button>
+            <button data-my-filter="review" type="button">Проверка</button>
+            <button data-my-filter="completed" type="button">Готовые</button>
+            <button data-my-filter="disputes" type="button">Споры</button>
+            <button data-my-filter="drafts" type="button">Черновики</button>
+          </div>
+          <div class="task-list" id="my-tasks"></div>
+        </section>
+
+        <section class="screen" id="screen-work" data-title="Задание">
+          <div class="empty" id="work-empty">
+            <span class="icon-badge"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="m14.8 9.2-1.6 4-4 1.6 1.6-4 4-1.6Z" /></svg></span>
+            <h2>Нет активного задания</h2>
+            <p>Примите задание из ленты или откройте свое задание из списка.</p>
+          </div>
+
+          <div id="work-card" class="hidden">
+            <article class="card hero">
+              <span class="badge" id="work-status">Принято</span>
+              <h2 id="work-title"></h2>
+              <p id="work-description"></p>
+              <div class="meta" id="work-meta"></div>
+            </article>
+            <section class="timer-card">
+              <div>
+                <span>Осталось времени</span>
+                <strong id="countdown">—</strong>
+              </div>
+              <button class="secondary compact-button" id="route" type="button">Маршрут</button>
+            </section>
+            <ol class="steps" id="steps">
+              <li>Принято</li><li>Выполняется</li><li>Проверка</li><li>Готово</li>
+            </ol>
+            <section class="card checklist">
+              <h2>Чек-лист качества</h2>
+              <label><input type="checkbox" id="check-location" /> Геотег совпадает с адресом</label>
+              <label><input type="checkbox" id="check-photo" /> Фото четкое, объект полностью виден</label>
+              <label><input type="checkbox" id="check-comment" /> Комментарий отправлен заказчику</label>
+            </section>
+            <section class="card chat">
+              <div class="section-title compact">
+                <h2>Чат</h2>
+                <button class="text-button danger" id="report" type="button">Жалоба</button>
+              </div>
+              <div class="messages" id="messages"></div>
+              <form class="message-form" id="message-form">
+                <input id="message" placeholder="Сообщение..." />
+                <button type="submit" aria-label="Отправить"><svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1Z" /><path d="m12 13 8-9" /></svg></button>
+              </form>
+              <div class="chat-warning hidden" id="chat-warning">Внимание: платите и общайтесь только внутри приложения. Переводы напрямую нельзя защитить арбитражем.</div>
+            </section>
+            <div class="actions" id="worker-actions">
+              <button class="secondary" id="start" type="button">Начать</button>
+              <button class="secondary" id="photo" type="button">Сделать фото</button>
+              <input class="hidden" id="photo-input" type="file" accept="image/*" capture="environment" />
+              <button class="primary" id="review" type="button">На проверку</button>
+            </div>
+            <div class="card review hidden" id="customer-actions">
+              <div class="photo-preview" id="photo-preview">Фотоотчет появится здесь</div>
+              <textarea id="revision" rows="3" placeholder="Комментарий для доработки"></textarea>
+              <div class="actions two">
+                <button class="secondary" id="revise" type="button">На доработку</button>
+                <button class="primary" id="accept" type="button">Принять</button>
+              </div>
+            </div>
+            <section class="card rating-card hidden" id="rating-card">
+              <h2 id="rating-title">Оцените участника</h2>
+              <p id="rating-text">Поставьте от 1 до 5 звёзд после задания.</p>
+              <div class="rating-stars" id="rating-stars" aria-label="Оценка участника">
+                <button type="button" data-rating="1" aria-label="1 звезда"><svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></button>
+                <button type="button" data-rating="2" aria-label="2 звезды"><svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></button>
+                <button type="button" data-rating="3" aria-label="3 звезды"><svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></button>
+                <button type="button" data-rating="4" aria-label="4 звезды"><svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></button>
+                <button type="button" data-rating="5" aria-label="5 звёзд"><svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="screen" id="screen-profile" data-title="Профиль">
+          <article class="card profile">
+            <div class="avatar" id="avatar">А</div>
+            <div>
+              <h2 id="profile-name">Пользователь</h2>
+              <p id="profile-subtitle">Единый аккаунт · 0 заданий</p>
+            </div>
+            <b class="profile-rating"><svg class="mini-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg><span id="profile-rating">0</span></b>
+          </article>
+          <article class="card account-card">
+            <div>
+              <span class="caption">Аккаунт</span>
+              <h2 id="profile-account-status">Зарегистрируйтесь, чтобы создать профиль</h2>
+              <p>Заказчик и исполнитель — это два режима одного аккаунта. Имя, аватар, баланс и данные профиля будут общими.</p>
+            </div>
+            <div class="account-actions">
+              <button class="secondary" id="edit-account" type="button">Регистрация</button>
+              <button class="secondary danger-action" id="logout-account" type="button">Выйти</button>
+            </div>
+          </article>
+          <article class="card wallet">
+            <span>Баланс</span>
+            <strong id="wallet">0 ₽</strong>
+            <form class="sbp-form" id="sbp-form">
+              <label>
+                Сумма пополнения через СБП
+                <input id="sbp-amount" type="number" min="1" step="1" placeholder="Например, 1000" />
+              </label>
+              <button class="primary" type="submit">Пополнить через СБП</button>
+            </form>
+            <div class="sbp-note">Демо-режим: платёж СБП подтверждается сразу.</div>
+            <form class="sbp-form payout-form" id="payout-form">
+              <h2>Вывести через СБП</h2>
+              <label>
+                Сумма вывода
+                <input id="payout-amount" type="number" min="1" step="1" placeholder="Например, 500" />
+              </label>
+              <label>
+                Телефон СБП или номер карты
+                <input id="payout-card" inputmode="numeric" autocomplete="tel" maxlength="23" placeholder="+7 900 000-00-00" />
+              </label>
+              <button class="primary" type="submit">Вывести деньги</button>
+            </form>
+            <div class="sbp-note">MVP-контур: заявки идут через backend-провайдера. CVC и полные платёжные данные не должны проходить через приложение.</div>
+          </article>
+          <article class="card security-card">
+            <h2>Безопасность</h2>
+            <p>Эскроу, рейтинг, страховой залог исполнителя, жалобы, арбитраж, подтверждение через Госуслуги и предупреждения о переводах вне платформы.</p>
+            <div class="security-actions">
+              <button class="secondary compact-button" id="verify-account" type="button">Подтвердить личность</button>
+              <button class="secondary compact-button" id="check-esia-status" type="button">Проверить статус ЕСИА</button>
+              <button class="secondary compact-button" id="enable-push" type="button">Включить push</button>
+            </div>
+            <div class="sbp-note" id="esia-status-note">Подтверждение открывает Госуслуги через backend ЕСИА. После возврата статус проверяется на сервере.</div>
+          </article>
+          <article class="card info-card">
+            <span class="caption">Доверие</span>
+            <h2>Проверки профиля</h2>
+            <ul class="trust-list" id="trust-list"></ul>
+          </article>
+          <article class="card info-card">
+            <span class="caption">Финансы</span>
+            <h2>История операций</h2>
+            <div class="transaction-list" id="transaction-list"></div>
+          </article>
+          <article class="card info-card">
+            <span class="caption">Документы</span>
+            <h2>Правила, данные и геолокация</h2>
+            <p>Краткая версия документов уже встроена в регистрацию: правила сообщества, согласие на обработку персональных данных, использование геоданных и ограничения ответственности.</p>
+            <div class="document-grid">
+              <div><b>Правила сервиса</b><span>Что можно публиковать, как вести спор и почему нельзя обходить безопасную сделку.</span></div>
+              <div><b>Персональные данные</b><span>Какие данные нужны для аккаунта, заданий, поддержки, платежей и защиты от мошенничества.</span></div>
+              <div><b>Геоданные</b><span>Карта и расстояние работают только с разрешения пользователя и нужны для заданий рядом.</span></div>
+            </div>
+            <div class="document-actions">
+              <button class="secondary compact-button" id="open-privacy-policy" type="button">Ознакомиться с политикой конфиденциальности</button>
+              <button class="secondary compact-button danger-action" id="withdraw-consent" type="button">Отзыв согласия</button>
+            </div>
+          </article>
+          <article class="card info-card install-card">
+            <span class="caption">Установка</span>
+            <h2>Как поставить как приложение</h2>
+            <ol class="steps-list">
+              <li>Откройте сайт через HTTPS или localhost.</li>
+              <li>На Android/Chrome нажмите «Установить приложение» или кнопку загрузки сверху.</li>
+              <li>На iPhone/Safari: «Поделиться» → «На экран Домой».</li>
+              <li>Если кнопки нет, обновите страницу и проверьте, что сайт не открыт во встроенном браузере мессенджера.</li>
+            </ol>
+          </article>
+          <article class="card info-card backend-card">
+            <span class="caption">Готовность к backend</span>
+            <h2>Что подключается на сервере</h2>
+            <p>Аккаунты, задания, баланс, история операций и заявки поддержки уже работают через backend. Для реального запуска ещё нужны SMS/push-провайдер, банковский adapter, полноценная ЕСИА-настройка, хранение файлов и production-мониторинг.</p>
+            <div class="status-pills">
+              <span>Аккаунты</span><span>Задания</span><span>Чат</span><span>Платежи</span><span>Push</span>
+            </div>
+          </article>
+          <article class="card notification-card">
+            <div class="section-title compact">
+              <h2>Уведомления</h2>
+              <button class="text-button" id="clear-notifications" type="button">Прочитано</button>
+            </div>
+            <div class="notification-list" id="notification-list"></div>
+          </article>
+          <article class="card settings-card">
+            <h2>Демо-данные</h2>
+            <p>Если хотите начать сценарий заново, сбросьте локальное состояние приложения.</p>
+            <button class="secondary" id="reset-demo" type="button">Сбросить демо</button>
+          </article>
+          <article class="card settings-card danger-zone-card">
+            <h2>Удаление аккаунта</h2>
+            <p>Удаление очистит локальный профиль, черновики и демо-данные на этом устройстве.</p>
+            <button class="secondary danger-action" id="delete-account" type="button">Удалить аккаунт</button>
+          </article>
+        </section>
+
+        <section class="screen" id="screen-admin" data-title="Админ">
+          <article class="card admin-panel hidden" id="admin-panel">
+            <span class="caption">Модераторы</span>
+            <h2>Админ-панель</h2>
+            <p>Панель видна аккаунту модератора. Здесь есть список всех зарегистрированных пользователей, жалобы, арбитраж, журнал действий и ошибки.</p>
+            <div class="stats admin-stats" id="admin-stats"></div>
+            <div class="admin-section">
+              <div class="section-title compact"><h2>Очередь модерации заданий</h2></div>
+              <div class="admin-list" id="admin-moderation"></div>
+            </div>
+            <div class="admin-section">
+              <div class="section-title compact"><h2>Все пользователи</h2></div>
+              <div class="admin-list" id="admin-users"></div>
+            </div>
+            <div class="admin-section">
+              <div class="section-title compact"><h2>Жалобы и арбитраж</h2></div>
+              <div class="admin-list" id="admin-disputes"></div>
+            </div>
+            <div class="admin-section">
+              <div class="section-title compact"><h2>Журнал действий</h2></div>
+              <div class="activity-list" id="admin-audit"></div>
+            </div>
+            <div class="admin-section">
+              <div class="section-title compact"><h2>Мониторинг ошибок</h2></div>
+              <div class="activity-list" id="admin-errors"></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="screen" id="screen-register" data-title="Регистрация">
+          <article class="card register-hero">
+            <span class="icon-badge" id="register-hero-icon"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.2a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></span>
+            <h2 id="register-hero-title">Единый аккаунт</h2>
+            <p id="register-hero-text">Заполните данные один раз: в режиме заказчика и исполнителя будет использоваться один и тот же профиль.</p>
+          </article>
+          <article class="card social-login-card">
+            <span class="caption">Быстрый вход</span>
+            <h2>Войти через подтверждённый аккаунт</h2>
+            <div class="social-login-grid">
+              <button class="social-login-button esia" id="login-esia" type="button">
+                <svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 20 6v5.9c0 5.1-3.4 8-8 9.3-4.6-1.3-8-4.2-8-9.3V6l8-3.2Z" /><path d="M8.1 12.2h7.8" /><path d="M9.4 8.9h5.2" /><path d="M9.4 15.5h5.2" /></svg>
+                <span>Госуслуги</span>
+              </button>
+            </div>
+            <p class="social-login-note" id="social-login-note">Для настоящего входа через Госуслуги нужен backend с подключённой ЕСИА. В демо кнопка показывает готовый сценарий подключения.</p>
+          </article>
+          <form class="card form account-form" id="register-form">
+            <label id="register-name-label">
+              Имя и фамилия
+              <input id="register-name" required minlength="2" autocomplete="name" placeholder="Например, Мария Сергеева" />
+            </label>
+            <label>
+              Юзернейм
+              <input id="register-username" autocomplete="username" placeholder="Например: Maria_Sergeevna" />
+            </label>
+            <label>
+              Телефон
+              <input id="register-phone" required inputmode="tel" autocomplete="tel" placeholder="+7 900 000-00-00" />
+            </label>
+            <label>
+              Пароль
+              <input id="register-password" required type="password" minlength="4" autocomplete="current-password" placeholder="Минимум 4 символа" />
+            </label>
+            <button class="text-button forgot-password" id="forgot-password" type="button" hidden>Забыли пароль?</button>
+            <div class="sms-row">
+              <button class="secondary" id="send-sms-code" type="button">Получить SMS/push-код</button>
+              <span id="sms-demo-code"></span>
+            </div>
+            <label>
+              Код из SMS или push
+              <input id="register-sms-code" inputmode="numeric" maxlength="6" placeholder="Введите код" />
+            </label>
+            <label id="register-city-label">
+              Город
+              <input id="register-city" autocomplete="address-level2" placeholder="Например, Москва" />
+            </label>
+            <div class="account-note" id="register-status">После регистрации баланс останется общим для обоих режимов.</div>
+            <button class="primary" id="register-submit" type="submit">Сохранить аккаунт</button>
+            <button class="text-button account-mode-back hidden" id="back-to-login" type="button">Вернуться ко входу</button>
+          </form>
+        </section>
+
+        <section class="screen" id="screen-support" data-title="Поддержка">
+          <article class="card support">
+            <span class="icon-badge"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17Z" /><path d="M9.7 9.4a2.4 2.4 0 0 1 4.6.9c0 1.9-2.3 2.1-2.3 3.7" /><path d="M12 17h.01" /></svg></span>
+            <h2>Поддержка 24/7</h2>
+            <p id="support-intro">Напишите вопрос: сначала ответит бот, а если советы не помогут — можно передать диалог живой поддержке.</p>
+          </article>
+          <section class="card support-console hidden" id="support-console">
+            <div class="section-title compact">
+              <h2>Панель поддержки</h2>
+              <span class="badge warn" id="support-open-count">0 заявок</span>
+            </div>
+            <label>
+              ID задания или заявки
+              <input id="support-task-lookup" placeholder="Например, DR-123456 или SUP-123456" />
+            </label>
+            <button class="secondary compact-button" id="support-find-task" type="button">Найти чат</button>
+            <div class="support-ticket-list" id="support-ticket-list"></div>
+          </section>
+          <section class="card support-chat-card">
+            <div class="section-title compact">
+              <div>
+                <h2 id="support-chat-title">Чат с поддержкой</h2>
+                <p id="support-chat-subtitle">Бот поможет подобрать решение</p>
+              </div>
+              <button class="secondary compact-button" id="ticket" type="button">Новая заявка</button>
+            </div>
+            <label>
+              По какому заданию вопрос? (необязательно)
+              <select id="support-task-select"></select>
+            </label>
+            <div class="support-suggestions" id="support-suggestions"></div>
+            <div class="messages support-messages" id="support-messages"></div>
+            <form class="message-form" id="support-form">
+              <input id="support-message" placeholder="Опишите вопрос поддержке..." />
+              <button type="submit" aria-label="Отправить"><svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1Z" /><path d="m12 13 8-9" /></svg></button>
+            </form>
+            <button class="secondary" id="support-escalate" type="button">Связаться с живой поддержкой</button>
+          </section>
+          <div class="faq-list">
+            <article class="card"><h2>Когда деньги поступят?</h2><p>Оплата хранится в безопасной сделке и выпускается после кнопки «Принять». В споре выплата блокируется до решения поддержки.</p></article>
+            <article class="card"><h2>Что делать при нарушении?</h2><p>Нажмите «Жалоба» в чате задания — переписка, фотоотчёт и геометка сохранятся для арбитража.</p></article>
+          </div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav">
+        <button class="active" data-screen="home" type="button" aria-label="Карта">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18.5 4.5 20V6L9 4.5m0 14V4.5m0 14 6 2m0-16-6-2m6 2L19.5 3v14L15 20.5m0-16v16" /></svg>
+          <span>Карта</span>
+        </button>
+        <button data-screen="create" id="nav-create" type="button" aria-label="Создать">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span>Создать</span>
+        </button>
+        <button data-screen="feed" id="nav-feed" type="button" aria-label="Лента">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h11M8 12h11M8 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" /></svg>
+          <span>Лента</span>
+        </button>
+        <button data-screen="my" type="button" aria-label="Мои задания">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5h8l2 2v13H6v-13l2-2Z" /><path d="M9 10h6M9 14h6M9 18h4" /></svg>
+          <span>Мои</span>
+        </button>
+        <button data-screen="work" type="button" aria-label="Задание">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.5 11.2 14 16 8.5" /><path d="M7 3.8h10A2.2 2.2 0 0 1 19.2 6v12a2.2 2.2 0 0 1-2.2 2.2H7A2.2 2.2 0 0 1 4.8 18V6A2.2 2.2 0 0 1 7 3.8Z" /></svg>
+          <span>Задание</span>
+        </button>
+        <button data-screen="support" type="button" aria-label="Помощь">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17Z" /><path d="M9.7 9.4a2.4 2.4 0 0 1 4.6.9c0 1.9-2.3 2.1-2.3 3.7" /><path d="M12 17h.01" /></svg>
+          <span>Помощь</span>
+        </button>
+        <button data-screen="profile" type="button" aria-label="Профиль">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.2a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+          <span>Профиль</span>
+        </button>
+        <button class="hidden" data-screen="admin" id="nav-admin" type="button" aria-label="Админ">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6.5v5.8c0 4.4-3.2 7.2-8 8.7-4.8-1.5-8-4.3-8-8.7V6.5L12 3Z" /><path d="M9.2 12.2 11.2 14.2 15.2 9.8" /></svg>
+          <span>Админ</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="agreement-modal hidden" id="community-agreement" role="dialog" aria-modal="true" aria-labelledby="agreement-title">
+      <div class="agreement-card">
+        <span class="caption">Обязательное согласие</span>
+        <h2 id="agreement-title">Правила сообщества и условия использования</h2>
+        <p>
+          Перед регистрацией подтвердите, что вы принимаете правила сервиса «Дела рядом» и понимаете свою ответственность как пользователь.
+        </p>
+        <div class="agreement-text">
+          <h3>Правила сообщества и условия сервиса</h3>
+          <ul>
+            <li>используете сервис добровольно, законно и добросовестно, соблюдая законодательство Российской Федерации;</li>
+            <li>являетесь дееспособным пользователем, достигли 18 лет либо используете сервис с согласия законного представителя, если такое согласие требуется законом;</li>
+            <li>не размещаете незаконные, опасные, мошеннические, дискриминационные задания, угрозы, спам, чужие персональные данные без согласия, а также товары или услуги, запрещённые законом;</li>
+            <li>самостоятельно отвечаете за достоверность данных, свои задания, отклики, сообщения, материалы, качество работ, безопасность выполнения, наличие необходимых разрешений и налоговые обязанности;</li>
+            <li>понимаете, что сервис является информационной площадкой для связи заказчиков и исполнителей, не является вашим работодателем, заказчиком, исполнителем или стороной сделки между пользователями;</li>
+            <li>понимаете, что сервис не гарантирует результат работ, поведение других пользователей, их платёжеспособность, квалификацию и полную безопасность взаимодействия;</li>
+            <li>обязуетесь общаться и оплачивать задания внутри сервиса, не обходить безопасную сделку и обращаться в поддержку при споре или нарушении;</li>
+            <li>согласны, что ответственность сервиса ограничивается пределами, допустимыми законодательством РФ, и не исключает ответственность, которую нельзя исключить законом.</li>
+          </ul>
+          <h3>Персональные данные</h3>
+          <ul>
+            <li>вы соглашаетесь на обработку данных, которые указываете при регистрации и использовании сервиса: имя, юзернейм, телефон, город, сообщения, задания, отклики, прикреплённые файлы, данные профиля, историю действий, обращения в поддержку и технические данные устройства;</li>
+            <li>обработка включает сбор, запись, систематизацию, хранение, уточнение, использование, передачу, обезличивание, блокирование, удаление и уничтожение данных с использованием средств автоматизации и без них;</li>
+            <li>данные используются для создания аккаунта, связи между пользователями, подбора заданий, безопасной сделки, рейтингов, поддержки, предотвращения мошенничества, рассмотрения жалоб, исполнения закона и улучшения сервиса;</li>
+            <li>часть данных может быть доступна другим пользователям только в объёме, необходимом для задания, связи, выполнения работ, спора или поддержки;</li>
+            <li>данные могут передаваться платёжным, картографическим, техническим, хостинговым, аналитическим и иным подрядчикам только для работы сервиса, безопасности, поддержки, оплаты, исполнения закона или защиты прав;</li>
+            <li>вы вправе запросить доступ к своим данным, их уточнение, удаление, ограничение обработки или отозвать согласие через поддержку. Отзыв согласия может сделать регистрацию и отдельные функции сервиса недоступными.</li>
+          </ul>
+          <h3>Геоданные и карта</h3>
+          <ul>
+            <li>сервис запрашивает доступ к геолокации устройства только с вашего разрешения через настройки браузера или приложения;</li>
+            <li>если вы разрешили доступ, сервис может получать координаты, примерную точность и время обновления местоположения, в том числе для отображения вас на карте, расчёта расстояния до заданий, подбора заданий рядом и построения маршрута;</li>
+            <li>геоданные используются для работы функций «рядом», карты, маршрута, адреса задания, проверки расстояния, безопасности сделки, разбирательств по жалобам и предотвращения злоупотреблений;</li>
+            <li>при создании задания выбранная вами точка или адрес могут быть показаны другим пользователям в объёме, необходимом для выполнения задания;</li>
+            <li>вы можете отключить доступ к геолокации в настройках устройства или браузера. В этом случае карта, задания рядом, расчёт расстояния и маршруты могут работать неточно или быть недоступны;</li>
+            <li>сервис не должен использовать геоданные для скрытого наблюдения за пользователем вне целей работы приложения и защиты прав участников.</li>
+          </ul>
+          <h3>Хранение, безопасность и изменения</h3>
+          <ul>
+            <li>сервис принимает разумные организационные и технические меры для защиты данных от несанкционированного доступа, изменения, раскрытия и уничтожения;</li>
+            <li>данные хранятся столько, сколько необходимо для целей обработки, работы аккаунта, исполнения обязательств, рассмотрения споров, бухгалтерских, налоговых и иных требований закона;</li>
+            <li>при изменении правил или политики сервис может попросить вас принять обновлённые условия. Если вы не согласны с ними, вы можете отказаться от регистрации или прекратить использование сервиса.</li>
+          </ul>
+        </div>
+        <div class="agreement-actions">
+          <button class="secondary danger-action" id="agreement-decline" type="button">Отказаться</button>
+          <button class="primary" id="agreement-accept" type="button">Принять</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast-stack" id="toast-stack"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
