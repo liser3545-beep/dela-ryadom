@@ -19,6 +19,12 @@ services:
         value: None
       - key: COOKIE_SECURE
         value: "true"
+      - key: ADMIN_ACCOUNT_IDS
+        value: ""
+      - key: SUPPORT_ACCOUNT_IDS
+        value: ""
+      - key: MODERATOR_ACCOUNT_IDS
+        value: ""
       - key: DATABASE_URL
         fromDatabase:
           name: dela-ryadom-db
@@ -29,14 +35,60 @@ services:
         value: "false"
       - key: PAYMENT_PROVIDER
         value: mock
+      - key: PAYMENT_PRIMARY_BANK
+        value: yookassa_sbp
+      - key: PAYMENT_WEBHOOK_SECRET
+        value: ""
       - key: PAYMENT_MOCK_AUTO_CONFIRM
         value: "false"
+      - key: YOOKASSA_SHOP_ID
+        value: ""
+      - key: YOOKASSA_SECRET_KEY
+        value: ""
+      - key: YOOKASSA_API_URL
+        value: https://api.yookassa.ru/v3
       - key: ESIA_CLIENT_ID
         value: ""
       - key: ESIA_CLIENT_SECRET
         value: ""
       - key: ESIA_REDIRECT_URI
         value: https://dela-ryadom.onrender.com/api/auth/esia/callback
+      - key: ESIA_SCOPE
+        value: openid fullname mobile email
+      - key: ESIA_AUTH_URL
+        value: https://esia.gosuslugi.ru/aas/oauth2/ac
+      - key: ESIA_TOKEN_URL
+        value: https://esia.gosuslugi.ru/aas/oauth2/te
+      - key: ESIA_USERINFO_URL
+        value: ""
+      - key: SMS_PROVIDER
+        value: disabled
+      - key: SMS_API_KEY
+        value: ""
+      - key: SMS_SENDER
+        value: ""
+      - key: VAPID_PUBLIC_KEY
+        value: ""
+      - key: VAPID_PRIVATE_KEY
+        value: ""
+      - key: VAPID_SUBJECT
+        value: mailto:admin@dela-ryadom.onrender.com
+      - key: FILE_STORAGE_PROVIDER
+        value: local-disabled
+      - key: S3_ENDPOINT
+        value: ""
+      - key: S3_REGION
+        value: ru-1
+      - key: S3_BUCKET
+        value: ""
+      - key: S3_ACCESS_KEY_ID
+        value: ""
+      - key: S3_SECRET_ACCESS_KEY
+        value: ""
+      - key: S3_PUBLIC_BASE_URL
+        value: ""
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
 
 databases:
   - name: dela-ryadom-db
